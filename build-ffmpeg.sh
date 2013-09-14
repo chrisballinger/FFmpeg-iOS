@@ -26,7 +26,7 @@
 #  Choose your ffmpeg version and your currently-installed iOS SDK version:
 #
 VERSION="2.0.1"
-SDKVERSION="6.1"
+SDKVERSION="7.0"
 #
 #
 ###########################################################################
@@ -90,35 +90,37 @@ set -e # back to regular "bail out on error" mode
 
 for ARCH in ${ARCHS}
 do
-	if [ "${ARCH}" == "i386" ];
-	then
+	if [ "${ARCH}" == "i386" ]; then
 		PLATFORM="iPhoneSimulator"
-        EXTRA_CONFIG="--arch=i386 --disable-asm"
-        EXTRA_CFLAGS="-arch i386"
-        EXTRA_LDFLAGS=""
-	else
-		PLATFORM="iPhoneOS"
-        EXTRA_CONFIG="--arch=arm --target-os=darwin --enable-cross-compile --cpu=cortex-a8 --disable-armv5te"
-        EXTRA_CFLAGS="-w -arch ${ARCH} -mfpu=neon"
-        EXTRA_LDFLAGS="-mfpu=neon"
+        EXTRA_CONFIG="--arch=i386 --target-os=darwin --enable-cross-compile"
+        EXTRA_CFLAGS="-arch i386 -miphoneos-version-min=6.0"
+        EXTRA_LDFLAGS="-miphoneos-version-min=6.0"
+    else
+        PLATFORM="iPhoneOS"
+        EXTRA_CONFIG="--arch=arm --target-os=darwin --enable-cross-compile --disable-armv5te"
+        EXTRA_CFLAGS="-w -arch ${ARCH} -miphoneos-version-min=6.0"
+        EXTRA_LDFLAGS="-miphoneos-version-min=6.0"
 	fi
 
-	mkdir -p "${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
+    OUTPUT_DIR="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
+    if [ ! -d "$OUTPUT_DIR" ]; then
+        mkdir -p ${OUTPUT_DIR}
 
-	./configure --disable-shared --enable-static --enable-pic \
-    --cc=${CCACHE}${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/usr/bin/gcc ${EXTRA_CONFIG} \
-    --prefix="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk" \
-    --sysroot=${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk \
-    --extra-ldflags="-arch ${ARCH} ${EXTRA_LDFLAGS} -L${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk/usr/lib/system -isysroot=${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk $LDFLAGS -L${OUTPUTDIR}/lib" \
-    --extra-cflags="$CFLAGS ${EXTRA_CFLAGS} -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk" \
-    --extra-cxxflags="$CPPFLAGS -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk"
+    	./configure --disable-shared --enable-static --enable-pic \
+        --cc=${CCACHE}${DEVELOPER}/usr/bin/gcc ${EXTRA_CONFIG} \
+        --prefix="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk" \
+        --sysroot=${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk \
+        --extra-ldflags="-arch ${ARCH} ${EXTRA_LDFLAGS} -L${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk/usr/lib/system -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk $LDFLAGS -L${OUTPUTDIR}/lib" \
+        --extra-cflags="$CFLAGS ${EXTRA_CFLAGS} -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk" \
+        --extra-cxxflags="$CPPFLAGS -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk"
 
-    # Build the application and install it to the fake SDK intermediary dir
-    # we have set up. Make sure to clean up afterward because we will re-use
-    # this source tree to cross-compile other targets.
-	make -j2
-	make install
-	make clean
+        # Build the application and install it to the fake SDK intermediary dir
+        # we have set up. Make sure to clean up afterward because we will re-use
+        # this source tree to cross-compile other targets.
+    	make -j2
+    	make install
+    	make clean
+    fi
 done
 
 ########################################
@@ -126,7 +128,7 @@ done
 echo "Build library..."
 
 # These are the libs that comprise ffmpeg.
-OUTPUT_LIBS="libavcodec.a libavdevice.a libavformat.a libavutil.a libswscale.a"
+OUTPUT_LIBS="libavcodec.a libavdevice.a libavfilter.a libavformat.a libavutil.a libswresample.a libswscale.a"
 for OUTPUT_LIB in ${OUTPUT_LIBS}; do
     INPUT_LIBS=""
     for ARCH in ${ARCHS}; do
