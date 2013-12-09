@@ -101,6 +101,10 @@ else
 fi
 set -e # back to regular "bail out on error" mode
 
+# fix the make clean error because of a weird "-.d" file
+patch -p3 < ../../../patches/make-clean-dash-dot-d-file-fix.patch
+
+
 for ARCH in ${ARCHS}
 do
     if [ "${ARCH}" == "i386" ]; then
