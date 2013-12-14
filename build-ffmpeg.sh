@@ -25,7 +25,7 @@
 ###########################################################################
 #  Choose your ffmpeg version and your currently-installed iOS SDK version:
 #
-VERSION="2.0.1"
+VERSION="2.1.1"
 SDKVERSION="7.0"
 #
 #
@@ -35,7 +35,20 @@ SDKVERSION="7.0"
 #
 ###########################################################################
 
-# No need to change this since xcode build will only compile in the
+
+# by default, we won't build for debugging purposes
+if [ "${DEBUG}" == "true" ]; then
+    echo "Compiling for debugging ..."
+    DEBUG_CFLAGS="-fPIE -O0 -fno-inline -g"
+    DEBUG_LDFLAGS="-fPIE"
+    DEBUG_CONFIG_ARGS="--disable-programs --enable-debug=3 --disable-optimizations --disable-stripping --disable-asm --assert-level=2"
+else
+    DEBUG_CFLAGS=""
+    DEBUG_LDFLAGS=""
+    DEBUG_CONFIG_ARGS=""
+fi
+
+# no need to change this since xcode build will only compile in the
 # necessary bits from the libraries we create
 ARCHS="i386 armv7 armv7s"
 
@@ -44,7 +57,7 @@ DEVELOPER=`xcode-select -print-path`
 cd "`dirname \"$0\"`"
 REPOROOT=$(pwd)
 
-# Where we'll end up storing things in the end
+# where we'll end up storing things in the end
 OUTPUTDIR="${REPOROOT}/dependencies"
 mkdir -p ${OUTPUTDIR}/include
 mkdir -p ${OUTPUTDIR}/lib
@@ -53,7 +66,7 @@ mkdir -p ${OUTPUTDIR}/bin
 
 BUILDDIR="${REPOROOT}/build"
 
-# where we will keep our sources and build from.
+# where we will keep our sources and build from
 SRCDIR="${BUILDDIR}/src"
 mkdir -p $SRCDIR
 # where we will store intermediary builds
@@ -68,10 +81,10 @@ cd $SRCDIR
 set -e
 
 if [ ! -e "${SRCDIR}/ffmpeg-${VERSION}.tar.bz2" ]; then
-	echo "Downloading ffmpeg-${VERSION}.tar.bz2"
+    echo "Downloading ffmpeg-${VERSION}.tar.bz2"
     curl -LO http://ffmpeg.org/releases/ffmpeg-${VERSION}.tar.bz2
 else
-	echo "Using ffmpeg-${VERSION}.tar.bz2"
+    echo "Using ffmpeg-${VERSION}.tar.bz2"
 fi
 
 tar zxf ffmpeg-${VERSION}.tar.bz2 -C $SRCDIR
@@ -88,25 +101,29 @@ else
 fi
 set -e # back to regular "bail out on error" mode
 
+# fix the make clean error because of a weird "-.d" file
+patch -p3 < ../../../patches/make-clean-dash-dot-d-file-fix.patch
+
+
 for ARCH in ${ARCHS}
 do
-	if [ "${ARCH}" == "i386" ]; then
-		PLATFORM="iPhoneSimulator"
+    if [ "${ARCH}" == "i386" ]; then
+        PLATFORM="iPhoneSimulator"
         EXTRA_CONFIG="--arch=i386 --target-os=darwin --enable-cross-compile"
-        EXTRA_CFLAGS="-arch i386 -miphoneos-version-min=6.0"
-        EXTRA_LDFLAGS="-miphoneos-version-min=6.0"
+        EXTRA_CFLAGS="-arch i386 -miphoneos-version-min=6.0 ${DEBUG_CFLAGS}"
+        EXTRA_LDFLAGS="-miphoneos-version-min=6.0 ${DEBUG_LDFLAGS}"
     else
         PLATFORM="iPhoneOS"
         EXTRA_CONFIG="--arch=arm --target-os=darwin --enable-cross-compile --disable-armv5te"
         EXTRA_CFLAGS="-w -arch ${ARCH} -miphoneos-version-min=6.0"
         EXTRA_LDFLAGS="-miphoneos-version-min=6.0"
-	fi
+    fi
 
     OUTPUT_DIR="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
     if [ ! -d "$OUTPUT_DIR" ]; then
         mkdir -p ${OUTPUT_DIR}
 
-    	./configure --disable-shared --enable-static --enable-pic \
+        ./configure --disable-shared --enable-static --enable-pic ${DEBUG_CONFIG_ARGS} \
         --cc=${CCACHE}${DEVELOPER}/usr/bin/gcc ${EXTRA_CONFIG} \
         --prefix="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk" \
         --sysroot=${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk \
@@ -117,9 +134,9 @@ do
         # Build the application and install it to the fake SDK intermediary dir
         # we have set up. Make sure to clean up afterward because we will re-use
         # this source tree to cross-compile other targets.
-    	make -j2
-    	make install
-    	make clean
+        make -j2
+        make install
+        make clean
     fi
 done
 
@@ -140,12 +157,12 @@ for OUTPUT_LIB in ${OUTPUT_LIBS}; do
         fi
         INPUT_ARCH_LIB="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk/lib/${OUTPUT_LIB}"
         if [ -e $INPUT_ARCH_LIB ]; then
-            INPUT_LIBS="${INPUT_LIBS} ${INPUT_ARCH_LIB}"
+            INPUT_LIBS="${INPUT_LIBS} -arch ${ARCH} ${INPUT_ARCH_LIB}"
         fi
     done
     # Combine the three architectures into a universal library.
     if [ -n "$INPUT_LIBS"  ]; then
-        lipo -create $INPUT_LIBS \
+        xcrun -sdk iphoneos lipo -create $INPUT_LIBS \
         -output "${OUTPUTDIR}/lib/${OUTPUT_LIB}"
     else
         echo "$OUTPUT_LIB does not exist, skipping (are the dependencies installed?)"
