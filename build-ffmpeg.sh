@@ -27,6 +27,8 @@
 #
 VERSION="2.1.1"
 SDKVERSION="7.0"
+MINIOSVERSION="6.0"
+
 #
 #
 ###########################################################################
@@ -39,9 +41,9 @@ SDKVERSION="7.0"
 # by default, we won't build for debugging purposes
 if [ "${DEBUG}" == "true" ]; then
     echo "Compiling for debugging ..."
-    DEBUG_CFLAGS="-fPIE -O0 -fno-inline -g"
-    DEBUG_LDFLAGS="-fPIE"
-    DEBUG_CONFIG_ARGS="--disable-programs --enable-debug=3 --disable-optimizations --disable-stripping --disable-asm --assert-level=2"
+    DEBUG_CFLAGS="-O0 -fno-inline -g"
+    DEBUG_LDFLAGS=""
+    DEBUG_CONFIG_ARGS="--enable-debug=3 --disable-optimizations --disable-stripping --disable-asm --assert-level=2"
 else
     DEBUG_CFLAGS=""
     DEBUG_LDFLAGS=""
@@ -50,7 +52,7 @@ fi
 
 # no need to change this since xcode build will only compile in the
 # necessary bits from the libraries we create
-ARCHS="i386 armv7 armv7s"
+ARCHS="i386 x86_64 armv7 armv7s arm64"
 
 DEVELOPER=`xcode-select -print-path`
 
@@ -107,28 +109,28 @@ patch -p3 < ../../../patches/make-clean-dash-dot-d-file-fix.patch
 
 for ARCH in ${ARCHS}
 do
-    if [ "${ARCH}" == "i386" ]; then
+    if [ "${ARCH}" == "i386" ] || [ "${ARCH}" == "x86_64" ]; then
         PLATFORM="iPhoneSimulator"
-        EXTRA_CONFIG="--arch=i386 --target-os=darwin --enable-cross-compile"
-        EXTRA_CFLAGS="-arch i386 -miphoneos-version-min=6.0 ${DEBUG_CFLAGS}"
-        EXTRA_LDFLAGS="-miphoneos-version-min=6.0 ${DEBUG_LDFLAGS}"
+        EXTRA_CONFIG="--arch=${ARCH} --target-os=darwin --enable-cross-compile"
+        EXTRA_CFLAGS="-arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION} ${DEBUG_CFLAGS}"
+        EXTRA_LDFLAGS="-miphoneos-version-min=${MINIOSVERSION} ${DEBUG_LDFLAGS}"
     else
         PLATFORM="iPhoneOS"
         EXTRA_CONFIG="--arch=arm --target-os=darwin --enable-cross-compile --disable-armv5te"
-        EXTRA_CFLAGS="-w -arch ${ARCH} -miphoneos-version-min=6.0"
-        EXTRA_LDFLAGS="-miphoneos-version-min=6.0"
+        EXTRA_CFLAGS="-w -arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION}"
+        EXTRA_LDFLAGS="-miphoneos-version-min=${MINIOSVERSION}"
     fi
 
     OUTPUT_DIR="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
     if [ ! -d "$OUTPUT_DIR" ]; then
         mkdir -p ${OUTPUT_DIR}
 
-        ./configure --disable-shared --enable-static --enable-pic ${DEBUG_CONFIG_ARGS} \
+        ./configure --disable-programs --disable-shared --enable-static --enable-pic ${DEBUG_CONFIG_ARGS} \
         --cc=${CCACHE}${DEVELOPER}/usr/bin/gcc ${EXTRA_CONFIG} \
         --prefix="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk" \
         --sysroot=${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk \
-        --extra-ldflags="-arch ${ARCH} ${EXTRA_LDFLAGS} -L${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk/usr/lib/system -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk $LDFLAGS -L${OUTPUTDIR}/lib" \
-        --extra-cflags="$CFLAGS ${EXTRA_CFLAGS} -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk" \
+        --extra-ldflags="-arch ${ARCH} -fPIE ${EXTRA_LDFLAGS} -L${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk/usr/lib/system -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk $LDFLAGS -L${OUTPUTDIR}/lib" \
+        --extra-cflags="$CFLAGS -fPIE ${EXTRA_CFLAGS} -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk" \
         --extra-cxxflags="$CPPFLAGS -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk"
 
         # Build the application and install it to the fake SDK intermediary dir
@@ -149,8 +151,7 @@ OUTPUT_LIBS="libavcodec.a libavdevice.a libavfilter.a libavformat.a libavutil.a 
 for OUTPUT_LIB in ${OUTPUT_LIBS}; do
     INPUT_LIBS=""
     for ARCH in ${ARCHS}; do
-        if [ "${ARCH}" == "i386" ];
-        then
+        if [ "${ARCH}" == "i386" ] || [ "${ARCH}" == "x86_64" ]; then
             PLATFORM="iPhoneSimulator"
         else
             PLATFORM="iPhoneOS"
@@ -170,8 +171,7 @@ for OUTPUT_LIB in ${OUTPUT_LIBS}; do
 done
 
 for ARCH in ${ARCHS}; do
-    if [ "${ARCH}" == "i386" ];
-    then
+    if [ "${ARCH}" == "i386" ] || [ "${ARCH}" == "x86_64" ]; then
         PLATFORM="iPhoneSimulator"
     else
         PLATFORM="iPhoneOS"
@@ -179,21 +179,6 @@ for ARCH in ${ARCHS}; do
     cp -R ${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk/include/* ${OUTPUTDIR}/include/
     if [ $? == "0" ]; then
         # We only need to copy the headers over once. (So break out of forloop
-        # once we get first success.)
-        break
-    fi
-done
-
-for ARCH in ${ARCHS}; do
-    if [ "${ARCH}" == "i386" ];
-    then
-        PLATFORM="iPhoneSimulator"
-    else
-        PLATFORM="iPhoneOS"
-    fi
-    cp -R ${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk/bin/* ${OUTPUTDIR}/bin/
-    if [ $? == "0" ]; then
-        # We only need to copy the binaries over once. (So break out of forloop
         # once we get first success.)
         break
     fi
