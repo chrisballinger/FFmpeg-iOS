@@ -25,7 +25,7 @@
 ###########################################################################
 #  Choose your rtmpdump version and your currently-installed iOS SDK version:
 #
-VERSION="2.3"
+VERSION="HEAD"
 SDKVERSION="7.0"
 MINIOSVERSION="6.0"
 
@@ -82,14 +82,13 @@ cd $SRCDIR
 # Exit the script if an error happens
 set -e
 
-if [ ! -e "${SRCDIR}/rtmpdump-${VERSION}.tgz" ]; then
-    echo "Downloading rtmpdump-${VERSION}.tgz"
-    curl -LO http://rtmpdump.mplayerhq.hu/download/rtmpdump-${VERSION}.tgz
+if [ ! -e "${SRCDIR}/rtmpdump-${VERSION}" ]; then
+    git clone git://git.ffmpeg.org/rtmpdump rtmpdump-${VERSION}
 else
-    echo "Using rtmpdump-${VERSION}.tgz"
+    cd "${SRCDIR}/rtmpdump-${VERSION}"
+    git pull origin master
 fi
 
-tar zxf rtmpdump-${VERSION}.tgz -C $SRCDIR
 cd "${SRCDIR}/rtmpdump-${VERSION}/librtmp"
 
 set +e # don't bail out of bash script if ccache doesn't exist
@@ -178,5 +177,4 @@ done
 echo "Building done."
 echo "Cleaning up..."
 rm -fr ${INTERDIR}
-rm -fr "${SRCDIR}/rtmpdump-${VERSION}"
 echo "Done."
