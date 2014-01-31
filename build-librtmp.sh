@@ -1,9 +1,9 @@
 #!/bin/bash
-#  Builds ffmpeg for all three current iPhone targets: iPhoneSimulator-i386,
+#  Builds rtmpdump for all three current iPhone targets: iPhoneSimulator-i386,
 #  iPhoneOS-armv7, iPhoneOS-armv7s.
 #
-#  FFmpeg modifications by Chris Ballinger
-#  Copyright 2012 Chris Ballinger <chris@openwatch.net>
+#  rtmpdump modifications by Chris Ballinger
+#  Copyright 2014 Chris Ballinger <chris@openwatch.net>
 #  
 #  Copyright 2012 Mike Tigas <mike@tig.as>
 #
@@ -23,9 +23,9 @@
 #  limitations under the License.
 #
 ###########################################################################
-#  Choose your ffmpeg version and your currently-installed iOS SDK version:
+#  Choose your rtmpdump version and your currently-installed iOS SDK version:
 #
-VERSION="2.1.3"
+VERSION="2.3"
 SDKVERSION="7.0"
 MINIOSVERSION="6.0"
 
@@ -43,11 +43,11 @@ if [ "${DEBUG}" == "true" ]; then
     echo "Compiling for debugging ..."
     DEBUG_CFLAGS="-O0 -fno-inline -g"
     DEBUG_LDFLAGS=""
-    DEBUG_CONFIG_ARGS="--enable-debug=3 --disable-optimizations --disable-stripping --disable-asm --assert-level=2"
+    DEBUG_CONFIG_ARGS=""
 else
     DEBUG_CFLAGS="-g"
     DEBUG_LDFLAGS=""
-    DEBUG_CONFIG_ARGS="--disable-stripping"
+    DEBUG_CONFIG_ARGS=""
 fi
 
 # no need to change this since xcode build will only compile in the
@@ -82,15 +82,15 @@ cd $SRCDIR
 # Exit the script if an error happens
 set -e
 
-if [ ! -e "${SRCDIR}/ffmpeg-${VERSION}.tar.bz2" ]; then
-    echo "Downloading ffmpeg-${VERSION}.tar.bz2"
-    curl -LO http://ffmpeg.org/releases/ffmpeg-${VERSION}.tar.bz2
+if [ ! -e "${SRCDIR}/rtmpdump-${VERSION}.tgz" ]; then
+    echo "Downloading rtmpdump-${VERSION}.tgz"
+    curl -LO http://rtmpdump.mplayerhq.hu/download/rtmpdump-${VERSION}.tgz
 else
-    echo "Using ffmpeg-${VERSION}.tar.bz2"
+    echo "Using rtmpdump-${VERSION}.tgz"
 fi
 
-tar zxf ffmpeg-${VERSION}.tar.bz2 -C $SRCDIR
-cd "${SRCDIR}/ffmpeg-${VERSION}"
+tar zxf rtmpdump-${VERSION}.tgz -C $SRCDIR
+cd "${SRCDIR}/rtmpdump-${VERSION}/librtmp"
 
 set +e # don't bail out of bash script if ccache doesn't exist
 CCACHE=`which ccache`
@@ -103,20 +103,16 @@ else
 fi
 set -e # back to regular "bail out on error" mode
 
-# fix the make clean error because of a weird "-.d" file
-patch -p3 < ../../../patches/make-clean-dash-dot-d-file-fix.patch
-
-
 for ARCH in ${ARCHS}
 do
     if [ "${ARCH}" == "i386" ] || [ "${ARCH}" == "x86_64" ]; then
         PLATFORM="iPhoneSimulator"
-        EXTRA_CONFIG="--arch=${ARCH} --target-os=darwin --enable-cross-compile"
+        EXTRA_CONFIG=""
         EXTRA_CFLAGS="-arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION} ${DEBUG_CFLAGS}"
         EXTRA_LDFLAGS="-miphoneos-version-min=${MINIOSVERSION} ${DEBUG_LDFLAGS}"
     else
         PLATFORM="iPhoneOS"
-        EXTRA_CONFIG="--arch=arm --target-os=darwin --enable-cross-compile --disable-armv5te"
+        EXTRA_CONFIG=""
         EXTRA_CFLAGS="-w -arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION}"
         EXTRA_LDFLAGS="-miphoneos-version-min=${MINIOSVERSION}"
     fi
@@ -125,19 +121,12 @@ do
     if [ ! -d "$OUTPUT_DIR" ]; then
         mkdir -p ${OUTPUT_DIR}
 
-        ./configure --disable-programs --disable-shared --enable-static --enable-pic --enable-librtmp --enable-openssl ${DEBUG_CONFIG_ARGS} \
-        --cc=${CCACHE}${DEVELOPER}/usr/bin/gcc ${EXTRA_CONFIG} \
-        --prefix="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk" \
-        --sysroot=${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk \
-        --extra-ldflags="-arch ${ARCH} -fPIE ${EXTRA_LDFLAGS} -L${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk/usr/lib/system -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk $LDFLAGS -L${OUTPUTDIR}/lib" \
-        --extra-cflags="$CFLAGS -fPIE ${EXTRA_CFLAGS} -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk" \
-        --extra-cxxflags="$CPPFLAGS -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk"
-
         # Build the application and install it to the fake SDK intermediary dir
         # we have set up. Make sure to clean up afterward because we will re-use
         # this source tree to cross-compile other targets.
-        make -j2
-        make install
+        export XCFLAGS="-fPIE ${EXTRA_CFLAGS} -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk"
+        export INC="-I${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk"
+        make prefix=\"${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk\" SYS=darwin SHARED= install
         make clean
     fi
 done
@@ -146,8 +135,8 @@ done
 
 echo "Build library..."
 
-# These are the libs that comprise ffmpeg.
-OUTPUT_LIBS="libavcodec.a libavdevice.a libavfilter.a libavformat.a libavutil.a libswresample.a libswscale.a"
+# These are the libs that comprise rtmpdump.
+OUTPUT_LIBS="librtmp.a"
 for OUTPUT_LIB in ${OUTPUT_LIBS}; do
     INPUT_LIBS=""
     for ARCH in ${ARCHS}; do
@@ -189,5 +178,5 @@ done
 echo "Building done."
 echo "Cleaning up..."
 rm -fr ${INTERDIR}
-rm -fr "${SRCDIR}/ffmpeg-${VERSION}"
+rm -fr "${SRCDIR}/rtmpdump-${VERSION}"
 echo "Done."
