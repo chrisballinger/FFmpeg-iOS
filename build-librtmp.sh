@@ -45,7 +45,7 @@ if [ "${DEBUG}" == "true" ]; then
     DEBUG_LDFLAGS=""
     DEBUG_CONFIG_ARGS=""
 else
-    DEBUG_CFLAGS="-g"
+    DEBUG_CFLAGS="-O3 -g"
     DEBUG_LDFLAGS=""
     DEBUG_CONFIG_ARGS=""
 fi
@@ -113,8 +113,8 @@ do
     else
         PLATFORM="iPhoneOS"
         EXTRA_CONFIG=""
-        EXTRA_CFLAGS="-w -arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION}"
-        EXTRA_LDFLAGS="-miphoneos-version-min=${MINIOSVERSION}"
+        EXTRA_CFLAGS="-w -arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION} ${DEBUG_CFLAGS}"
+        EXTRA_LDFLAGS="-miphoneos-version-min=${MINIOSVERSION} ${DEBUG_LDFLAGS}"
     fi
 
     OUTPUT_DIR="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
@@ -126,7 +126,7 @@ do
         # this source tree to cross-compile other targets.
         export XCFLAGS="-fPIE ${EXTRA_CFLAGS} -I${OUTPUTDIR}/include -isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk"
         export INC="-I${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk"
-        make prefix=\"${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk\" SYS=darwin SHARED= install
+        make prefix=\"${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk\" SYS=darwin SHARED= OPT= install
         make clean
     fi
 done
