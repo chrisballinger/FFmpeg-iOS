@@ -23,7 +23,7 @@
 #  Choose your openssl version and your currently-installed iOS SDK version:
 #
 VERSION="1.0.1f"
-SDKVERSION="7.0"
+SDKVERSION="7.1"
 MINIOSVERSION="6.0"
 VERIFYGPG=true
 
@@ -39,6 +39,13 @@ ARCHS="i386 x86_64 armv7 armv7s arm64"
 
 DEVELOPER=`xcode-select -print-path`
 #DEVELOPER="/Applications/Xcode.app/Contents/Developer"
+
+if [ "$1" == "--noverify" ]; then
+  VERIFYGPG=false
+fi
+if [ "$2" == "--i386only" ]; then
+  ARCHS="i386"
+fi
 
 cd "`dirname \"$0\"`"
 REPOROOT=$(pwd)
@@ -113,31 +120,28 @@ do
 		PLATFORM="iPhoneOS"
 	fi
 	
-	OUTPUT_DIR="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
-	if [ ! -d "$OUTPUT_DIR" ]; then
-        mkdir -p ${OUTPUT_DIR}
+	mkdir -p "${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
 
-		export PATH="${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/usr/bin/:${DEVELOPER}/Toolchains/XcodeDefault.xct‌​oolchain/usr/bin:${DEVELOPER}/usr/bin:${ORIGINALPATH}"
-		export CC="${CCACHE}`which gcc` -arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION}"
+	export PATH="${DEVELOPER}/Toolchains/XcodeDefault.xct‌​oolchain/usr/bin:${DEVELOPER}/usr/bin:${ORIGINALPATH}"
+	export CC="${CCACHE}`which gcc` -arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION}"
 
-		if [ "${ARCH}" == "x86_64" ] || [ "${ARCH}" == "arm64" ]; then
-			./configure BSD-generic64 no-asm enable-ec_nistp_64_gcc_128 \
-			--openssldir="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
-		else
-			./configure BSD-generic32 no-asm \
-			--openssldir="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
-		fi
-
-		# add -isysroot to configure-generated CFLAGS
-		sed -ie "s!^CFLAG=!CFLAG=-isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk !" "Makefile"
-
-		# Build the application and install it to the fake SDK intermediary dir
-		# we have set up. Make sure to clean up afterward because we will re-use
-		# this source tree to cross-compile other targets.
-		make -j2
-		make install
-		make clean
+	if [ "${ARCH}" == "x86_64" ] || [ "${ARCH}" == "arm64" ]; then
+		./configure BSD-generic64 no-asm enable-ec_nistp_64_gcc_128 \
+		--openssldir="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
+	else
+		./configure BSD-generic32 no-asm \
+		--openssldir="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
 	fi
+
+	# add -isysroot to configure-generated CFLAGS
+	sed -ie "s!^CFLAG=!CFLAG=-isysroot ${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk !" "Makefile"
+
+	# Build the application and install it to the fake SDK intermediary dir
+	# we have set up. Make sure to clean up afterward because we will re-use
+	# this source tree to cross-compile other targets.
+	make
+	make install
+	make clean
 done
 
 ########################################

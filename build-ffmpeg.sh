@@ -25,9 +25,10 @@
 ###########################################################################
 #  Choose your ffmpeg version and your currently-installed iOS SDK version:
 #
-VERSION="2.1.3"
-SDKVERSION="7.0"
+VERSION="2.2"
+SDKVERSION="7.1"
 MINIOSVERSION="6.0"
+VERIFYGPG=true
 
 #
 #
@@ -89,6 +90,24 @@ else
     echo "Using ffmpeg-${VERSION}.tar.bz2"
 fi
 
+# see https://www.openssl.org/about/,
+# up to you to set up `gpg` and add keys to your keychain
+if $VERIFYGPG; then
+    if [ ! -e "${SRCDIR}/ffmpeg-${VERSION}.tar.bz2.asc" ]; then
+        curl -O http://ffmpeg.org/releases/ffmpeg-${VERSION}.tar.bz2.asc
+    fi
+    echo "Using ffmpeg-${VERSION}.tar.bz2.asc"
+    if out=$(gpg --status-fd 1 --verify "ffmpeg-${VERSION}.tar.bz2.asc" "ffmpeg-${VERSION}.tar.bz2" 2>/dev/null) &&
+    echo "$out" | grep -qs "^\[GNUPG:\] VALIDSIG"; then
+        echo "$out" | egrep "GOODSIG|VALIDSIG"
+        echo "Verified GPG signature for source..."
+    else
+        echo "$out" >&2
+        echo "COULD NOT VERIFY PACKAGE SIGNATURE..."
+        exit 1
+    fi
+fi
+
 tar zxf ffmpeg-${VERSION}.tar.bz2 -C $SRCDIR
 cd "${SRCDIR}/ffmpeg-${VERSION}"
 
@@ -103,10 +122,6 @@ else
 fi
 set -e # back to regular "bail out on error" mode
 
-# fix the make clean error because of a weird "-.d" file
-patch -p3 < ../../../patches/make-clean-dash-dot-d-file-fix.patch
-
-
 for ARCH in ${ARCHS}
 do
     if [ "${ARCH}" == "i386" ] || [ "${ARCH}" == "x86_64" ]; then
@@ -116,7 +131,12 @@ do
         EXTRA_LDFLAGS="-miphoneos-version-min=${MINIOSVERSION} ${DEBUG_LDFLAGS}"
     else
         PLATFORM="iPhoneOS"
-        EXTRA_CONFIG="--arch=arm --target-os=darwin --enable-cross-compile --disable-armv5te"
+        if [ "${ARCH}" == "arm64" ]; then
+            FF_ARCH="aarch64"
+        else
+            FF_ARCH="arm"
+        fi
+        EXTRA_CONFIG="--arch=${FF_ARCH} --target-os=darwin --enable-cross-compile --disable-armv5te"
         EXTRA_CFLAGS="-w -arch ${ARCH} -miphoneos-version-min=${MINIOSVERSION}"
         EXTRA_LDFLAGS="-miphoneos-version-min=${MINIOSVERSION}"
     fi
@@ -125,7 +145,12 @@ do
     if [ ! -d "$OUTPUT_DIR" ]; then
         mkdir -p ${OUTPUT_DIR}
 
-        ./configure --disable-programs --disable-shared --enable-static --enable-pic --enable-librtmp --enable-openssl ${DEBUG_CONFIG_ARGS} \
+        ./configure --disable-programs --disable-shared --enable-static --enable-pic --enable-small --enable-librtmp --enable-openssl ${DEBUG_CONFIG_ARGS} \
+        --disable-decoders --enable-decoder=aac --enable-decoder=h264 \
+        --disable-encoders --enable-encoder=aac \
+        --disable-demuxers --enable-demuxer=aac --enable-demuxer=mov --enable-demuxer=mpegts --enable-demuxer=flv --enable-demuxer=h264 --enable-demuxer=caf \
+        --disable-muxers --enable-muxer=mov --enable-muxer=mp4 --enable-muxer=hls --enable-muxer=h264 --enable-muxer=mpegts --enable-muxer=flv --enable-muxer=f4v --enable-muxer=adts --enable-muxer=caf \
+        --disable-filters --disable-doc \
         --cc=${CCACHE}${DEVELOPER}/usr/bin/gcc ${EXTRA_CONFIG} \
         --prefix="${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk" \
         --sysroot=${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDKVERSION}.sdk \
