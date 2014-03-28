@@ -18,7 +18,7 @@ Pod::Spec.new do |s|
     ss.public_header_files = 'ffmpeg-ios-static-libs/include/**/*.h'
     ss.header_mappings_dir = 'ffmpeg-ios-static-libs/include'
     ss.vendored_libraries  = 'ffmpeg-ios-static-libs/lib/*.a'
-    ss.libraries = 'ssl', 'crypto', 'rtmp', 'avcodec', 'avdevice', 'avfilter', 'avformat', 'avutil', 'swresample', 'swscale'
+    ss.libraries = 'ssl', 'crypto', 'rtmp', 'avcodec', 'avdevice', 'avfilter', 'avformat', 'avutil', 'swresample', 'swscale', 'iconv', 'z', 'bz2'
   end
 
 end
