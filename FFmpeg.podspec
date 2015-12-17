@@ -4,7 +4,7 @@ Pod::Spec.new do |s|
   s.summary      = "FFmpeg static libraries compiled for iOS"
   s.homepage     = "https://github.com/chrisballinger/FFmpeg-iOS"
   
-  s.license      = { :type => 'LGPLv2.1+', :file => 'COPYING.LGPLv2.1' }
+  s.license      = { :type => 'LGPL', :file => 'LICENSE' }
   s.author       = { "Chris Ballinger" => "chris@chatsecure.org" } # Podspec maintainer
   s.requires_arc = false
   
